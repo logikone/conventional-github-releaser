@@ -9,15 +9,21 @@ var Q = require('q');
 var semver = require('semver');
 var through = require('through2');
 
-var github = new Github({
-  version: '3.0.0'
-});
-
-function conventionalGithubReleaser(auth, changelogOpts, context, gitRawCommitsOpts, parserOpts, writerOpts, userCb) {
-  if (!auth) {
-    throw new Error('Expected an auth object');
+function conventionalGithubReleaser(config, changelogOpts, context, gitRawCommitsOpts, parserOpts, writerOpts, userCb) {
+  if (!config) {
+    throw new Error('Expected a config object');
   }
 
+  if (!config.github) {
+    config.github = {};
+    config.github.version = '3.0.0';
+  }
+
+  if (!config.github.version) {
+    config.github.version = '3.0.0';
+  }
+
+  var github = new Github(config.github);
   var promises = [];
 
   var changelogArgs = [changelogOpts, context, gitRawCommitsOpts, parserOpts, writerOpts].map(function(arg) {
@@ -62,7 +68,7 @@ function conventionalGithubReleaser(auth, changelogOpts, context, gitRawCommitsO
   // ignore the default header partial
   writerOpts.headerPartial = writerOpts.headerPartial || '';
 
-  github.authenticate(auth);
+  github.authenticate(config.auth);
 
   Q.nfcall(gitSemverTags)
     .then(function(tags) {
@@ -91,10 +97,8 @@ function conventionalGithubReleaser(auth, changelogOpts, context, gitRawCommitsO
           }
 
           var version =  chunk.keyCommit.version;
-
           var prerelease = semver.parse(version).prerelease.length > 0;
-
-          var promise = Q.nfcall(github.releases.createRelease, {
+          var promise = Q.nfcall(github.repos.createRelease, {
             // jscs:disable
             owner: context.owner,
             repo: context.repository,

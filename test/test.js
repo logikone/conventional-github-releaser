@@ -6,9 +6,11 @@ var Github = require('github');
 var githubRemoveAllReleases = require('github-remove-all-releases');
 var shell = require('shelljs');
 
-var AUTH = {
-  type: 'oauth',
-  token: process.env.TEST_CONVENTIONAL_GITHUB_RELEASER_TOKEN
+var CONFIG = {
+  auth: {
+    type: 'oauth',
+    token: process.env.TEST_CONVENTIONAL_GITHUB_RELEASER_TOKEN
+  }
 };
 var GITHUB_USER = process.env.TEST_CONVENTIONAL_GITHUB_USER || 'stevemaotest';
 
@@ -16,16 +18,19 @@ var github = new Github({
   version: '3.0.0'
 });
 
-github.authenticate(AUTH);
+github.authenticate(CONFIG.auth);
 
 describe('conventional-github-releaser', function() {
-  before(function(done) {
+  before(function() {
     shell.cd('test');
+  });
+
+  beforeEach(function(done) {
     shell.exec('git init');
     fs.writeFileSync('test1', '');
     shell.exec('git add --all && git commit -m"First commit"');
 
-    githubRemoveAllReleases(AUTH, GITHUB_USER, 'conventional-github-releaser-test', function() {
+    githubRemoveAllReleases(CONFIG.auth, GITHUB_USER, 'conventional-github-releaser-test', function() {
       done();
     });
   });
@@ -35,7 +40,7 @@ describe('conventional-github-releaser', function() {
   });
 
   it('should throw if no auth is passed', function() {
-    expect(conventionalGithubReleaser).to.throw('Expected an auth object');
+    expect(conventionalGithubReleaser).to.throw('Expected a config object');
   });
 
   it('should throw if no cb is passed', function() {
@@ -45,7 +50,7 @@ describe('conventional-github-releaser', function() {
   });
 
   it('should error if git-raw-commits opts is wrong', function(done) {
-    conventionalGithubReleaser(AUTH, {}, {}, {
+    conventionalGithubReleaser(CONFIG, {}, {}, {
       version: '0.0.1'
     }, function(err) {
       expect(err).to.be.ok; // jshint ignore:line
@@ -55,7 +60,7 @@ describe('conventional-github-releaser', function() {
   });
 
   it('should error if no version can be found', function(done) {
-    conventionalGithubReleaser(AUTH, function(err) {
+    conventionalGithubReleaser(CONFIG, function(err) {
       expect(err).to.be.ok; // jshint ignore:line
 
       done();
@@ -65,14 +70,14 @@ describe('conventional-github-releaser', function() {
   it('should create a release', function(done) {
     shell.exec('git tag v1.0.0');
 
-    conventionalGithubReleaser(AUTH, {
+    conventionalGithubReleaser(CONFIG, {
       pkg: {
         path: __dirname + '/fixtures/_package.json'
       },
     }, function(err, responses) {
       expect(responses.length).to.equal(1);
       expect(responses[0].state).to.equal('fulfilled');
-      github.releases.getRelease({
+      github.repos.getRelease({
         // jscs:disable
         owner: GITHUB_USER,
         repo: 'conventional-github-releaser-test',
@@ -85,15 +90,46 @@ describe('conventional-github-releaser', function() {
     });
   });
 
+  it('should allow options to be passed to new Github', function(done) {
+    var altConfig = {
+      github: {
+        host: 'https://notgithub.com'
+      },
+      auth: {
+        type: 'oauth',
+        token: process.env.TEST_CONVENTIONAL_GITHUB_RELEASER_TOKEN
+      }
+    };
+    //shell.exec('git tag v1.0.1');
+
+    conventionalGithubReleaser(altConfig, {
+      pkg: {
+        path: __dirname + '/fixtures/_package.json'
+      },
+    }, function(err, res) {
+      expect(res[0].state).to.equal('rejected');
+      expect(res[0].reason.message).to.contain(altConfig.github.host);
+      done();
+    });
+  });
+
   it('should fail if a release exists', function(done) {
-    conventionalGithubReleaser(AUTH, {
+    conventionalGithubReleaser(CONFIG, {
       pkg: {
         path: __dirname + '/fixtures/_package.json'
       },
     }, function(err, responses) {
-      expect(responses[0].state).to.equal('rejected');
+      expect(responses[0].state).to.equal('fulfilled');
 
-      done(err);
+      conventionalGithubReleaser(CONFIG, {
+        pkg: {
+          path: __dirname + '/fixtures/_package.json'
+        },
+      }, function(err, responses) {
+        expect(responses[0].state).to.equal('rejected');
+
+        done(err);
+      });
     });
   });
 
@@ -102,14 +138,14 @@ describe('conventional-github-releaser', function() {
     shell.exec('git add --all && git commit -m"feat(awesome): second commit"');
     shell.exec('git tag v2.0.0-beta');
 
-    conventionalGithubReleaser(AUTH, {
+    conventionalGithubReleaser(CONFIG, {
       pkg: {
         path: __dirname + '/fixtures/_package.json'
       },
     }, function(err, responses) {
       expect(responses.length).to.equal(1);
       expect(responses[0].state).to.equal('fulfilled');
-      github.releases.getRelease({
+      github.repos.getRelease({
         // jscs:disable
         owner: GITHUB_USER,
         repo: 'conventional-github-releaser-test',
@@ -127,14 +163,14 @@ describe('conventional-github-releaser', function() {
     shell.exec('git add --all && git commit -m"feat(awesome): third commit"');
     shell.exec('git tag v2.0.0');
 
-    conventionalGithubReleaser(AUTH, {
+    conventionalGithubReleaser(CONFIG, {
       pkg: {
         path: __dirname + '/fixtures/_package.json'
       },
       preset: 'angular'
     }, function(err, responses) {
       expect(responses.length).to.equal(1);
-      github.releases.getRelease({
+      github.repos.getRelease({
         // jscs:disable
         owner: GITHUB_USER,
         repo: 'conventional-github-releaser-test',
@@ -155,7 +191,7 @@ describe('conventional-github-releaser', function() {
     shell.exec('git add --all && git commit -m"feat(awesome): fifth commit"');
     shell.exec('git tag v4.0.0');
 
-    conventionalGithubReleaser(AUTH, {
+    conventionalGithubReleaser(CONFIG, {
       pkg: {
         path: __dirname + '/fixtures/_package.json'
       },
@@ -167,7 +203,7 @@ describe('conventional-github-releaser', function() {
   });
 
   it('should attempt to generate all releases', function(done) {
-    conventionalGithubReleaser(AUTH, {
+    conventionalGithubReleaser(CONFIG, {
       pkg: {
         path: __dirname + '/fixtures/_package.json'
       },

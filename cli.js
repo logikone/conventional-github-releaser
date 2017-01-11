@@ -94,8 +94,10 @@ if (flags.verbose) {
 }
 
 conventionalGithubReleaser({
-  type: 'oauth',
-  token: flags.token || process.env.CONVENTIONAL_GITHUB_RELEASER_TOKEN
+  auth: {
+    type: 'oauth',
+    token: flags.token || process.env.CONVENTIONAL_GITHUB_RELEASER_TOKEN
+  }
 }, changelogOpts, templateContext, gitRawCommitsOpts, parserOpts, writerOpts, function(err, data) {
   if (err) {
     console.error(err.toString());
